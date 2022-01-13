@@ -20,6 +20,8 @@ services:
     environment:
       - LOAD_EX=n
       - EXECUTOR=Local
+      - URL=${URL}
+      - TOKEN=${TOKEN}
     logging:
       options:
         max-size: 10m
