@@ -3,7 +3,7 @@ To run: docker-compose up --build
 Playing with Airflow -> orchestrate simply ETL job
 
     - pull data from Spotify API (EXTRACT)
-    - transform data (TRANFORM)
+    - transform data (TRANSFORM)
     - load data to sqlite3 database (LOAD)
     - last task is printng final statement to logs
 
