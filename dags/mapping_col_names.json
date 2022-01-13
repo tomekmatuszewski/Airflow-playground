@@ -1,0 +1,9 @@
+{
+  "played_at": "played_at",
+  "track.album.artists": "artists_name",
+  "track.album.id": "album_id",
+  "track.album.name": "album_name",
+  "track.album.release_date": "release_date",
+  "track.name": "name",
+  "track.popularity": "popularity"
+}

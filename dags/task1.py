@@ -55,13 +55,7 @@ def get_data():
 
 
 def parse_json(data: dict) -> pd.DataFrame:
-    mapping_names = {'played_at': 'played_at',
-            'track.album.artists': 'artists_name',
-            'track.album.id': 'album_id',
-            'track.album.name': 'album_name',
-            'track.album.release_date': 'release_date',
-            'track.name': 'name',
-            'track.popularity': 'popularity'}
+    mapping_names = json.loads(open(BASE_DIR/'dags/mapping_col_names.json').read())
     df = pd.json_normalize(data)[mapping_names.keys()].rename(columns=mapping_names)
     df['url'] = df['artists_name'].apply(lambda col: col[0]['external_urls']['spotify'])
     df['artist_name'] = df['artists_name'].apply(lambda col: col[0]['name'])
@@ -73,7 +67,6 @@ def parse_json(data: dict) -> pd.DataFrame:
 def spotify_data_loader() -> None:
     data = get_data()['items']
     tracks_df = parse_json(data)
-    print(tracks_df)
     with sqlite3.connect(BASE_DIR / "spotify.db") as conn:
         cur = conn.cursor()
         tracks_df.to_sql("tracks", conn, if_exists='append', index=False)
