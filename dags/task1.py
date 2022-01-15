@@ -27,8 +27,10 @@ args = {
 # env vars
 DATABASE = os.getenv('DATABASE')
 CSV_PATH = os.getenv('CSV_PATH')
+JSON_PATH = os.getenv("JSON_PATH")
 URL = os.getenv("URL")
 TOKEN = os.getenv("TOKEN")
+
 
 dag = DAG(
     dag_id='spotify_job',
@@ -78,48 +80,72 @@ def get_sqllite_session(db_name: str) -> Tuple[Connection, Cursor]:
         return conn, cur
 
 
+def spotify_data_loader(**context) -> None:
+    try:
+        data = get_data()['items']
+        tracks_df = parse_json(data)
+        conn, cur = get_sqllite_session(context['db_name'])
+        tracks_df.to_sql(context['table'], conn, if_exists='append', index=False)
+        logger.info("Data loaded to sqlite database")
+        context['ti'].xcom_push(key='table', value='tracks')
+
+    except Exception as e:
+        logger.error(f"Exception occured: {e}")
+
+
 def csv_loader(db_name: str, table: str, destination_path: str) -> None:
     conn, cur = get_sqllite_session(db_name)
     df = pd.read_sql_query(f"SELECT * from {table}", conn)
     df.to_csv(path_or_buf=BASE_DIR / destination_path)
 
 
-def spotify_data_loader(db_name, table) -> None:
+def create_flat_csv_job(**context) -> None:
     try:
-        data = get_data()['items']
-        tracks_df = parse_json(data)
-        conn, cur = get_sqllite_session(db_name)
-        tracks_df.to_sql(table, conn, if_exists='append', index=False)
-        logger.info("Data loaded to sqlite database")
-    except Exception as e:
-        logger.error(f"Exception occured: {e}")
-
-
-def create_flat_csv_job(db_name: str, table: str, destination_path: str) -> None:
-    try:
-        csv_loader(db_name, table, destination_path)
+        table = context.get("ti").xcom_pull(key='table')
+        csv_loader(context['db_name'], table, context['destination_path'])
         logger.info("Data loaded to csv file")
     except Exception as e:
         logger.error(f"Exception occured: {e}")
+
+
+def json_loader(db_name: str, table: str, destination_path: str) -> None:
+    conn, cur = get_sqllite_session(db_name)
+    df = pd.read_sql_query(f"SELECT * from {table}", conn)
+    df.to_json(path_or_buf=BASE_DIR / destination_path, orient='records')
+
+
+def create_flat_json_job(**context) -> None:
+    try:
+        table = context.get("ti").xcom_pull(key='table')
+        json_loader(context['db_name'], table, context['destination_path'])
+        logger.info("Data loaded to json file")
+    except Exception as e:
+        logger.error(f"Exception occured: {e}")
+
 
 with dag:
     load_data_sqllite = PythonOperator(
         task_id='load_data_to_sqllite',
         python_callable=spotify_data_loader,
         retries=3,
-        op_kwargs={'db_name': DATABASE, 'table': 'tracks'}
+        op_kwargs={'db_name': DATABASE, 'table': 'tracks'},
+        provide_context=True
 
     )
 
     load_data_to_csv = PythonOperator(
         task_id='load_data_to_csv',
         python_callable=create_flat_csv_job,
-        op_kwargs={'db_name': DATABASE, 'table': 'tracks', 'destination_path': CSV_PATH}
+        op_kwargs={'db_name': DATABASE, 'destination_path': CSV_PATH},
+        provide_context=True
     )
 
-    load_data_sqllite >> load_data_to_csv
+    load_data_to_json = PythonOperator(
+        task_id='load_data_to_json_job',
+        python_callable=create_flat_json_job,
+        op_kwargs={'db_name': DATABASE, 'destination_path': JSON_PATH},
+        provide_context=True
+    )
 
+    load_data_sqllite >> [load_data_to_csv, load_data_to_json]
 
-# if __name__ == "__main__":
-#     spotify_data_loader("spotify.db", "tracks")
-#     create_flat_csv_job("spotify.db", "tracks", 'csv_results/tracks.csv')
