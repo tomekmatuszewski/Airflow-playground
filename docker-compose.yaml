@@ -20,14 +20,15 @@ services:
     environment:
       - LOAD_EX=n
       - EXECUTOR=Local
-      - URL=${URL}
-      - TOKEN=${TOKEN}
+    env_file: ./.env
     logging:
       options:
         max-size: 10m
         max-file: "3"
     volumes:
       - ./dags:/usr/local/airflow/dags
+      - ./csv_results:/usr/local/airflow/csv_results
+      - ./json_results:/usr/local/airflow/json_results
       # - ./plugins:/usr/local/airflow/plugins
     ports:
       - "8080:8080"
